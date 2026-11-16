@@ -1,5 +1,40 @@
 # Sidebar offset across a micro-frontend boundary
 
+## TL;DR
+
+### The bug
+
+- The new extended navigation is 112px tall, but the sidebar still sticks 64px from the top.
+- Both the sidebar skeleton in core and the Sidebar micro-frontend assume 64px.
+- You can see it at `/s/hardcoded?nav=extended`.
+
+### The fix
+
+- Core's navigation wrappers write the real header height into a CSS variable,
+  `--core-desktop-navigation-height`, as part of the server-rendered HTML.
+- The sidebar skeleton and the Sidebar micro-frontend read that variable and fall back to 64px when it's missing.
+- You can see it working at `/s/cssvar?nav=extended`.
+
+### Who changes what
+
+- Core updates its navigation wrappers and its sidebar skeleton.
+- The Sidebar micro-frontend updates its `top` and `height`.
+- Apps don't change any code. They only upgrade core.
+
+### Rollout
+
+- Ship the Sidebar micro-frontend first. On an old core the variable is missing, so it keeps today's 64px.
+- Apps then upgrade core whenever they're ready.
+
+### What to watch out for
+
+- Nothing checks the variable name. A typo won't throw an error; the sidebar silently goes back to 64px.
+
+### Other options
+
+- Marking the navigation with an HTML attribute and using `:has()` would also work, but it wasn't implemented.
+- Passing the height from core as a prop was rejected.
+
 ## System as is
 
 ```
@@ -58,16 +93,19 @@ each MF ── bundles its own copy of core (not shared) + uses the DS
   - Some teams don't use `Layout` at all, so the fix can't depend on it (or on `CoreProvider`).
   - It must be in the SSR HTML; measuring the header in JS comes too late and the page jumps.
 
-## Solution 1 (recommended): CSS variable `--core-header-height`
+## Solution 1 (recommended): CSS variable `--core-desktop-navigation-height`
 
 1. The app renders one of core's nav wrappers (`NavigationWrapper` / `ExtendedNavigationWrapper`), with or without
    `Layout`.
 2. The wrapper renders `<HeaderHeight>` (`src/core/HeaderHeight.tsx`): a plain
-   `<style nonce>:root{--core-header-height:112px}</style>`, height from core's private table.
+   `<style nonce>:root{--core-desktop-navigation-height:112px}</style>`, height from core's private table.
 3. It sits outside `Suspense`, so it's in the first SSR chunk, before any skeleton.
 4. The variable is on `:root`, so every element inherits it, across the MF boundary and in any layout.
-5. Core's sidebar skeleton and the Sidebar MF read `var(--core-header-height, 64px)`.
+5. Core's sidebar skeleton and the Sidebar MF read `var(--core-desktop-navigation-height, 64px)`.
 
+- Name: `desktop` + `navigation` matches the DS constant `DESKTOP_NAVIGATION_HEIGHT` (it replaces it) and core's
+  `NavigationWrapper` names. The value is the desktop height only; core sets it at every viewport width (no media
+  query), so only desktop styles should read it.
 - Only the wrapper knows the variant; `Layout`, `CoreProvider` and the Sidebar MF don't.
 - The `<style>` is removed when the wrapper unmounts, so routes with different navs just work.
 - MFs also bundle core, but never render the nav wrappers. Only the core version **installed in the app** decides
@@ -80,11 +118,11 @@ each MF ── bundles its own copy of core (not shared) + uses the DS
   - Nonce: from the per-request global on the server, from the page's `<script nonce>` in the browser.
     `suppressHydrationWarning`, because browsers hide `nonce` from the DOM under a CSP header.
 - [x] `CoreProvider` no longer takes `nav` or sets the variable.
-- [x] `SidebarSkeleton`: `top` / `height` from `var(--core-header-height, 64px)` instead of `64`.
+- [x] `SidebarSkeleton`: `top` / `height` from `var(--core-desktop-navigation-height, 64px)` instead of `64`.
 
 ### Micro-frontends repo (Sidebar)
 
-- [x] `top` / `height` from `var(--core-header-height, 64px)`; fallback = `DESKTOP_NAVIGATION_HEIGHT`.
+- [x] `top` / `height` from `var(--core-desktop-navigation-height, 64px)`; fallback = `DESKTOP_NAVIGATION_HEIGHT`.
 - No core bump needed:
   - it reads a CSS string, not core code;
   - bumping its core copy changes nothing here;
@@ -102,7 +140,8 @@ each MF ── bundles its own copy of core (not shared) + uses the DS
 - The variable name is an unchecked contract: a typo silently falls back to 64.
 - Heights live in two places: core's table and the nav MFs.
   - A nav height change needs a core release + app rebuilds.
-- Works only through core's nav wrappers: a team that loads a nav MF directly gets the 64px fallback.
+- Works only through core's nav wrappers. Not a limitation in practice: apps can consume the MFs only through
+  core's wrappers, so every nav on a page comes with its `<style>`.
 - Two navs on one page would both set the variable; the last `<style>` wins.
 - The `<style>` sits in `<body>`: invalid HTML strictly speaking, but every browser applies it.
 
@@ -111,7 +150,103 @@ each MF ── bundles its own copy of core (not shared) + uses the DS
 - `/s/cssvar?nav=extended`: new core + new MF; skeleton and sidebar both at 112.
 - `/s/legacy?nav=extended`: new MF, old core (no variable) → both at 64, same as today.
 
+## Alternative (not implemented): markup + `:has()`
+
+### TL;DR
+
+- Each navigation marks itself with an attribute such as `data-core-nav="extended"`.
+- A static CSS rule uses `:has()` to spot that attribute anywhere on the page and sets the sidebar offset.
+- It needs no `<style>` tag and no nonce.
+- The catch: shipping that rule as a CSS file from core breaks `"sideEffects": false`. Putting it in the Sidebar
+  micro-frontend instead means copying the height table there.
+
+Idea: the nav publishes its **variant name** as an HTML attribute, not its height as CSS. A static rule checks whether
+that attribute is in the page and applies the right offset. Core injects no `<style>`.
+
+1. Every nav `<header>` (core's nav skeletons **and** the nav MFs) renders `data-core-nav="default|extended"`.
+   - Plain attribute → in the SSR HTML, no nonce, valid HTML.
+   - Skeleton and MF must both set it, or the offset changes when the MF replaces the skeleton.
+   - The existing `data-variant` is test-only; a namespaced name makes the contract explicit.
+2. A static rule reacts to it. `:has()` = "an element that contains a matching element":
+   ```css
+   aside { top: 64px; height: calc(100vh / var(--core-body-zoom, 1) - 64px); }
+   :root:has([data-core-nav="extended"]) aside { top: 112px; height: calc(100vh / var(--core-body-zoom, 1) - 112px); }
+   ```
+   - Works between siblings, in any layout, no React involved: the selector sees the whole DOM.
+   - Route switches the nav → the attribute changes → the browser re-applies the rule by itself.
+   - No attribute (old navs) or no `:has()` support → 64px = today.
+
+### Where the rule lives
+
+Both the Sidebar MF **and** core's sidebar skeleton need it (otherwise skeleton 64 vs MF 112 → jump on swap).
+
+- **A. Core ships a CSS file** (sets `--core-desktop-navigation-height` via `:has()`; skeleton and MF keep reading the variable).
+  - Heights stay private to core; Sidebar MF unchanged from Solution 1.
+  - Needs a `sideEffects` change in core and depends on each app's CSS pipeline (see below).
+- **B. Each side owns its own rule** (Sidebar MF in its styles, core's skeleton in core's styles).
+  - Sidebar MF: no core change; a new nav variant needs only a Sidebar MF deploy, no app rebuilds.
+  - Core's skeleton can't express `:has()` through `Box` props, so core needs either one styled-components rule
+    (against the direction to move off styled-components) or a CSS file (same `sideEffects` change as A).
+  - Heights in three places: core's table, nav MFs, Sidebar MF.
+
+### Influence on `sideEffects`
+
+Core has `"sideEffects": false`. That tells the consumer's bundler: "importing a module of this package does nothing
+except provide exports; if no export is used, drop the import".
+
+| Approach | What core adds | `sideEffects` impact |
+| --- | --- | --- |
+| Solution 1 (inline `<style>`) | JSX inside a rendered component | **None**: it's code the app calls, so it's kept |
+| Markup (`data-core-nav`) | an attribute in JSX | **None** |
+| A, or B with a CSS file in core | `import './nav-height.css'` | **Breaking unless changed** |
+| B with a styled-components rule in core | a CSS string in JS, injected at render | **None** (but new styled-components code) |
+| Rule in the Sidebar MF | CSS in the MF build | **None**: the MF is a deployed remote, not an npm package another bundler tree-shakes |
+
+Why a CSS file breaks with `"sideEffects": false`:
+
+- `import './nav-height.css'` has no exports; it exists only for its side effect (adding CSS to the page).
+- With `false`, Rsbuild/Rspack (webpack semantics) may drop that import in the **production** build.
+- Dev builds don't tree-shake, so it works locally and fails silently in production: no error, sidebar back at 64.
+
+What the fix costs:
+
+- `package.json`: `"sideEffects": ["**/*.css"]`.
+  - JS modules stay side-effect-free and tree-shakable; only CSS files are always kept.
+  - The CSS still ships only when the nav wrapper module is used (an unused wrapper is dropped with its imports).
+- Core's tsdown build must emit the CSS file into the package and keep the import in the output (verify config).
+- Every app's bundler must handle a CSS import from `node_modules`, and its SSR setup must emit the `<link>` before
+  first paint. That's consumer configuration across 35+ apps, which Solution 1 avoids.
+- Keeping `false` and asking apps to `import 'core/nav-height.css'` themselves is a consumer code change: rejected
+  for the same reason.
+
+### Rollout (B)
+
+1. Sidebar MF adds the rule: no attribute anywhere yet → 64 = today.
+2. Nav MFs add the attribute: once a nav MF has loaded, the Sidebar MF moves to 112 (the old core skeleton stays 64,
+   so the swap jumps; still better than today's wrong offset).
+3. Core adds the attribute to nav skeletons + the rule to the sidebar skeleton → correct from the first byte.
+
+- Wrong order (core before nav MFs): skeleton has the attribute, the nav MF replaces it without one → everything drops
+  back to 64 after load.
+
+### Trade-offs vs Solution 1
+
+- \+ No nonce, no `<style>` in `<body>`, works under any CSP.
+- \+ Two navs on one page: the rules are deterministic (no "last `<style>` wins").
+- − `:has()` support: Chrome 105, Safari 15.4, Firefox 121. Check against the centralized browserslist; unsupported
+  browsers get 64.
+- − The attribute name and variant names are an unchecked contract (same as the variable name).
+- − A needs the `sideEffects` change and a working CSS pipeline in every app; B duplicates the height table and
+  needs either styled-components or a CSS file in core for the skeleton.
+
 ## Rejected: core passes the height as a prop
+
+### TL;DR
+
+- The navigation and the sidebar are siblings, and wrappers take no props from the app.
+- So `SidebarWrapper` has no way to learn the header height.
+- Making it work would mean the app passing heights (which it must never do) or a fragile hidden channel between
+  the two wrappers.
 
 Idea: core's `SidebarWrapper` passes `headerHeight={112}` to the Sidebar MF, and the MF uses it for `top` / `height`.
 

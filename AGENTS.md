@@ -8,13 +8,13 @@ navigation, across a micro-frontend boundary. Full picture: `docs/README.md`.
 1. `npm i && npm run dev` (Node >= 22.12), open http://localhost:5173, viewport >= 769px.
 2. Open `/s/hardcoded?nav=extended`: today's bug. Skeleton and sidebar stick at 64px under a 112px header.
 3. Compare `/s/hardcoded?nav=default`: correct, because the header is 64px.
-4. Read `docs/README.md` "System as is" (diagram + one bullet per part).
+4. Read `docs/README.md` "TL;DR", then "System as is" (diagram + one bullet per part).
 
 ## Where the bug lives
 
 - `src/core/wrappers.tsx`: `SidebarWrapper` renders `SidebarSkeleton` with `top` 64 (today's core) or
-  `var(--core-header-height, 64px)` (new core).
-- `src/core/HeaderHeight.tsx`: `<style>` the nav wrappers render to set `--core-header-height` on `:root`.
+  `var(--core-desktop-navigation-height, 64px)` (new core).
+- `src/core/HeaderHeight.tsx`: `<style>` the nav wrappers render to set `--core-desktop-navigation-height` on `:root`.
 - `src/micro-frontends/Sidebar.tsx`: `hardcoded` build uses `DESKTOP_NAVIGATION_HEIGHT` for `top` and `height`.
 - `src/micro-frontends/ds.ts`: design-system stand-in (`DESKTOP_NAVIGATION_HEIGHT = 64`).
 - `src/core/heights.ts`: core's private real heights (`default` 64, `extended` 112).

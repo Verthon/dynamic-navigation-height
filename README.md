@@ -5,7 +5,7 @@ navigation had the same height. It was not prepared for a navigation of another 
 (112px, `nav=extended`) put it at the wrong offset. Core can fix its own skeleton. The harder part is the sticky Sidebar
 micro-frontend: it needs the same `top`, but it bundles its own copy of core and gets no header height from it.
 
-Explanation and comparison of the approaches: [docs/README.md](docs/README.md) (also served at `/docs/README.md`).
+TL;DR, explanation and comparison of the approaches: [docs/README.md](docs/README.md) (also served at `/docs/README.md`).
 
 ## Run
 

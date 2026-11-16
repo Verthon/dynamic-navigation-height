@@ -27,7 +27,7 @@ export const SCENARIOS = {
   cssvar: {
     core: 'cssvar',
     sidebar: 'cssvar',
-    description: 'New core sets --core-header-height; skeleton and sidebar read it with a 64px fallback.',
+    description: 'New core sets --core-desktop-navigation-height; skeleton and sidebar read it with a 64px fallback.',
   },
   legacy: {
     core: 'today',

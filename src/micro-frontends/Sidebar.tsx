@@ -6,7 +6,7 @@ interface SidebarProps {
    * Repro-only: which build of this MF is deployed. A real sidebar has one version and takes no props.
    * - `hardcoded`: `DESKTOP_NAVIGATION_HEIGHT` (64px), what the sidebar does today. The constant comes from the DS,
    *   but using it for top/height is the micro-frontend's own code, not the DS.
-   * - `cssvar`: `var(--core-header-height, 64px)`; the fallback keeps today's behaviour on old cores
+   * - `cssvar`: `var(--core-desktop-navigation-height, 64px)`; the fallback keeps today's behaviour on old cores
    */
   version: 'hardcoded' | 'cssvar'
 }
@@ -14,7 +14,7 @@ interface SidebarProps {
 /** Sticky sidebar that must stick right below the header. */
 export default function Sidebar({ version }: SidebarProps) {
   const top =
-    version === 'hardcoded' ? `${DESKTOP_NAVIGATION_HEIGHT}px` : `var(--core-header-height, ${DESKTOP_NAVIGATION_HEIGHT}px)`
+    version === 'hardcoded' ? `${DESKTOP_NAVIGATION_HEIGHT}px` : `var(--core-desktop-navigation-height, ${DESKTOP_NAVIGATION_HEIGHT}px)`
   return (
     <Box
       as="aside"

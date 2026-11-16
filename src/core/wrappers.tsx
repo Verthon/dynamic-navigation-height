@@ -47,7 +47,7 @@ export function SidebarWrapper() {
   const { core, sidebar } = useScenario()
   const Sidebar = useRemote('sidebar', { remoteEntry: 200, chunk: 800 }, loadSidebar)
   // Today's core hardcodes 64 (the bug under nav=extended); the new core reads the variable its nav wrapper sets.
-  const top = core === 'today' ? '64px' : 'var(--core-header-height, 64px)'
+  const top = core === 'today' ? '64px' : 'var(--core-desktop-navigation-height, 64px)'
   return (
     <Suspense fallback={<SidebarSkeleton top={top} />}>
       {/* Repro-only prop: which MF build is deployed. A real MF has one version and no props from core. */}
