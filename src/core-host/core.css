@@ -1,0 +1,7 @@
+:root {
+  --core-body-zoom: 1;
+}
+html, body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+}
