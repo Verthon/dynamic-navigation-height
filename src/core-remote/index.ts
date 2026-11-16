@@ -1,7 +1,0 @@
-export { Box } from './Box'
-export { CoreProvider } from './CoreProvider'
-export { CoreContext, useCore } from './context'
-export { parseNavVariant } from './heights'
-export type { NavVariant } from './heights'
-export { NavigationWrapper, SidebarWrapper, FooterWrapper, SidebarSkeleton } from './wrappers'
-export type { Strategy } from './wrappers'

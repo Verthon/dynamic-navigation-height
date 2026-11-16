@@ -6,7 +6,4 @@ const HEIGHTS: Record<NavVariant, number> = {
   extended: 112,
 }
 
-export const parseNavVariant = (v: unknown): NavVariant =>
-  v === 'extended' ? 'extended' : 'default'
-
 export const getHeaderHeight = (variant: NavVariant): number => HEIGHTS[variant]

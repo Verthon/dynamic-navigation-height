@@ -15,6 +15,11 @@ const templateHtml = isProduction
 // Create http server
 const app = express()
 
+// Architecture docs: markdown rendered as plain text in the browser
+app.use(`${base}docs`, express.static('./docs', {
+  setHeaders: res => res.type('text/plain; charset=utf-8'),
+}))
+
 // Add Vite or respective production middlewares
 /** @type {import('vite').ViteDevServer | undefined} */
 let vite
@@ -53,14 +58,30 @@ app.use('*all', async (req, res) => {
     }
 
     const nonce = randomBytes(16).toString('base64')
-    const rendered = await render('/' + url, nonce)
-
-    const html = template
-      .replace(`<!--app-head-->`, rendered.head ?? '')
-      .replace(`<!--app-html-->`, rendered.html ?? '')
+    const [head, tail] = template
       .replaceAll('<script type="module"', `<script nonce="${nonce}" type="module"`)
+      .split('<!--app-html-->')
 
-    res.status(200).set({ 'Content-Type': 'text/html' }).send(html)
+    // Stream: shell with skeletons first, micro-frontends as their remotes arrive, then the client script.
+    render('/' + url, nonce, {
+      onShellReady(stream) {
+        res.status(200).set({ 'Content-Type': 'text/html' })
+        res.write(head)
+        stream.on('data', chunk => {
+          res.write(chunk)
+          res.flush?.() // compression buffers otherwise
+        })
+        stream.on('end', () => res.end(tail))
+        stream.on('error', e => {
+          console.error(e)
+          res.end()
+        })
+      },
+      onShellError(e) {
+        console.error(e)
+        res.status(500).end(String(e))
+      },
+    })
   } catch (e) {
     vite?.ssrFixStacktrace(e)
     console.log(e.stack)

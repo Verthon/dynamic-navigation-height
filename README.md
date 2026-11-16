@@ -1,33 +1,28 @@
 # nav-offset-repro
 
-Minimal SSR React 18.2 repro of a micro-frontend bug: a remote's sticky sidebar
-offset is wrong when the host header height changes with `nav=default|extended`.
+SSR React 18.2 repro. It started as a sidebar skeleton with a hardcoded `top={64}`, written when every desktop
+navigation had the same height. It was not prepared for a navigation of another height, so the new extended one
+(112px, `nav=extended`) put it at the wrong offset. Core can fix its own skeleton. The harder part is the sticky Sidebar
+micro-frontend: it needs the same `top`, but it bundles its own copy of core and gets no header height from it.
 
-The host and the remote each bundle their own copy of the "core" library
-(`src/core-host`, `src/core-remote`), so a React context created in one is not
-visible in the other. The remote reads the header height from its own
-provider-less context and falls back to 64px, while the real header is 112px
-under `nav=extended`.
+Explanation and comparison of the approaches: [docs/README.md](docs/README.md) (also served at `/docs/README.md`).
 
 ## Run
 
-Requires Node >= 22.12 (`.nvmrc` pins 24) and npm.
+Node >= 22.12.
 
 ```sh
 npm i
-npm run dev          # http://localhost:5173
+npm run dev                        # http://localhost:5173
 npm run build && npm run preview   # production SSR build
 ```
 
-## Scenarios
+Today's behaviour is at `/s/hardcoded?nav=extended` (viewport >= 769px): skeleton and sidebar both hardcode 64px.
+The fix is at `/s/cssvar?nav=extended`. `/s/legacy?nav=extended` shows that the new sidebar on an old core changes
+nothing. Each scenario is a core version plus a Sidebar MF build (`src/core/scenarios.tsx`). Passing the height as a
+prop was considered and rejected; see "Rejected" in the docs.
 
-`/s/<context|props|cssvar>?nav=default|extended` (desktop viewport >= 769px)
+## Scripts
 
-- `context`: reproduces the bug (sidebar `top: 64px` instead of 112px).
-- `props`: host passes the height to the remote as a prop.
-- `cssvar`: host exposes the height as a CSS variable.
-
-## Other scripts
-
-- `npm run verify`: fails if `core-host` and `core-remote` share a context instance, or drift apart.
-- `npm run sync-core`: re-copy `core-host` to `core-remote`.
+- `npm run sync-core`: regenerate `src/micro-frontends/core-copy` from `src/core`.
+- `npm run verify`: fail if the copy is symlinked or drifted from core.
